@@ -9,13 +9,13 @@
 #include <vector>
 #include <string>
 #include <queue>
+#include <unistd.h>
 
 struct work_pack
 {
     int               id, num;  // User Query
     pthread_t         tid;
     pthread_cond_t*   wait;     // Used to make the thread wait for work
-    pthread_mutex_t*  lock;     // 
     work_pack(int i_id = 0, int i_num = 1) 
     {
         id = i_id;
@@ -29,7 +29,6 @@ struct work_pack
 struct task_manager
 {
     pthread_mutex_t*      lock;   // Global Lock
-    std::queue<work_pack*> prog;   // Stores all the working threads
     std::queue<work_pack*> avail;  // Stores all the available threads
     task_manager() 
     { 
@@ -45,12 +44,11 @@ struct thread_pack
     void*       global;
     thread_pack(task_manager* i_g, work_pack* i_w)
     {
-      work = (void*)i_w;
-      global = (void*)i_g;
+        work = (void*)i_w;
+        global = (void*)i_g;
     }
 };
 
-void pause_resume();
 void* prime_thread(void* args);
 void print_usage();
 
@@ -60,40 +58,63 @@ int main(int argc, char** argv)
     task_manager* thread_pool = new task_manager;
     int num_thread = 10;
     if(argc >= 2)
-      num_thread = std::stoi(argv[1]);
+        num_thread = std::stoi(argv[1]);
       // Spin specified number of threads and have them wait for tasks
     for(int i = 0; i < num_thread; ++i)
     {
-      work_pack* tmp_w = new work_pack(i);
-      thread_pack* tmp = new thread_pack(thread_pool, tmp_w);
-      if (pthread_create(&(tmp->tid), NULL, prime_thread, (void*)tmp) != 0)
-          perror("pthread_create(Chat_Room)");
-      thread_pool->avail.push(tmp_w);
+        work_pack* tmp_w = new work_pack(i);
+        thread_pack* tmp = new thread_pack(thread_pool, tmp_w);
+        if (pthread_create(&(tmp->tid), NULL, prime_thread, (void*)tmp) != 0)
+            perror("pthread_create(Chat_Room)");
+        thread_pool->avail.push(tmp_w);
     }  
       // Await user input in a loop. If user specifies a number assign a thread
         // If user specifies an action, do the action
-    print_usage();
+    int user_num;
     std::string buffer;
     bool isPaused = false;
+    print_usage();
     while(std::cin >> buffer)
     {
-      if(buffer.compare("stop") == 0) 
-        break;
-      else if(buffer.compare("pause") == 0 && isPaused == false) 
-      {
-        pause_resume(); 
-        isPaused = true;
-      }
-      else if(buffer.compare("resume") == 0 && isPaused == true) 
-      {
-        pause_resume(); 
-        isPaused = false;
-      }
-
-      printf("Available Threads: %ld\n", thread_pool->avail.size());
+        printf("Available Threads: %ld\n", thread_pool->avail.size());
+        if(buffer.compare("stop") == 0) 
+            break;
+        else if(buffer.compare("pause") == 0 && isPaused == false) 
+        {
+            pthread_mutex_lock(thread_pool->lock); 
+            printf("Paused\n");
+            isPaused = true;
+        }
+        else if(buffer.compare("pause") == 0 && isPaused == true) 
+            printf("Already paused\n");
+        else if(buffer.compare("resume") == 0 && isPaused == true) 
+        {
+            pthread_mutex_unlock(thread_pool->lock); 
+            printf("Resume\n"); 
+            isPaused = false;
+        }
+        else if(buffer.compare("resume") == 0 && isPaused == false) 
+            printf("Must be paused to resume\n"); 
+        else if(buffer.compare("help") == 0)
+        {
+            print_usage();
+        }
+        else
+        {
+            if(thread_pool->avail.size() == 0)
+            {
+                printf("Please wait for a thread to become available.\n");
+                continue;
+            }
+            work_pack* tmp = thread_pool->avail.front();
+            user_num = std::stoi(buffer);
+            thread_pool->avail.pop();
+            tmp->num = user_num;
+            pthread_cond_signal(tmp->wait);
+        }
     }
-      // When Stop is specified AND TASK MANAGER IS EMPTY, break out and clean up
-
+      // When Stop is specified ALL threads are returned then clean up
+    while(thread_pool->avail.size() < 10);
     return 0;
 }
 
@@ -104,25 +125,43 @@ void print_usage()
     printf("\tstop - end the program\n\thelp - see this menue again\n");
 }
 
-void pause_resume()
-{
-    // Just grab the mutex
-}
-
 void* prime_thread(void* args)
 {
+    bool is_Prime = true;
     thread_pack* arg = (thread_pack*)args;
     work_pack* work = (work_pack*)arg->work;
     task_manager* global = (task_manager*)arg->global;
     work->tid = arg->tid;
+    
     while(1)
     {
-          //Lock the mutex then wait for work
+            // Lock the mutex then wait for work
         pthread_mutex_lock(global->lock);
         pthread_cond_wait(work->wait, global->lock);
-          //Once signaled work can begin
-          //If signaled num is -1 break and destroy
-        if(work->num == -1)
-          break;
+        pthread_mutex_unlock(global->lock);
+    
+            // Since the program goes by quick I wanted to give a bit of time
+            // So the user could pause and accumulate tasks then resume
+        printf("\tWorker Thread %d: I got your order of %d, gonna nap for 1s then work\n", work->id, work->num);
+        sleep(1);
+        printf("\tWorker Thread %d: I'm up and working!\n", work->id);
+        
+            // Once signaled work can begin
+        if(abs(work->num) <= 1)
+          is_Prime = false;
+        for(int i = 2; i < (abs(work->num)/2); ++i)
+        {
+          if((work->num % i) == 0)
+          {
+              is_Prime = false;
+              break;
+          }
+        }
+        if(is_Prime)
+            printf("\tWorker Thread %d: The number %d is prime!\n", work->id, work->num);
+        else
+            printf("\tWorker Thread %d: The number %d is not prime!\n", work->id, work->num);
+          // When done put self back on avail queue
+        global->avail.push(work);
     }
 }
