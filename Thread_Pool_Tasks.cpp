@@ -28,6 +28,7 @@ struct task_manager
     pthread_mutex_t*      lock;   // Global Lock
     std::queue<work_pack> prog;   // Stores all the working threads
     std::queue<work_pack> avail;  // Stores all the available threads
+    task_manager() { lock = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t)); }
 };
 
 struct thread_pack
@@ -37,6 +38,7 @@ struct thread_pack
     void* global;
 };
 
+void pause_resume();
 void* prime_thread(void* args);
 
 int main(int argc, char** argv)
@@ -50,6 +52,7 @@ int main(int argc, char** argv)
       // Spin specified number of threads and have them wait for tasks
     for(int i = 0; i < num_thread; ++i)
     {
+      struct work_pack* tmp = (struct work_pack*)malloc(sizeof(struct work_pack*));
 
     }  
       // Await user input in a loop. If user specifies a number assign a thread
@@ -58,6 +61,11 @@ int main(int argc, char** argv)
       // When Stop is specified AND TASK MANAGER IS EMPTY, break out and clean up
 
     return 0;
+}
+
+void pause_resume()
+{
+    // Just grab the mutex
 }
 
 void* prime_thread(void* args)
@@ -76,6 +84,4 @@ void* prime_thread(void* args)
         if(work->num == -1)
           break;
     }
-
-    pthread_cond_destroy(work->wait);
 }
