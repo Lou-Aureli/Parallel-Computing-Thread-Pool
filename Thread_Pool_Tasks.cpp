@@ -5,10 +5,16 @@
             - A refresh on pthreads for parallelism. Please use on a unix system (Ubuntu or SSH hydra)
             - For example code please use the provided input.txt and do ./Thread_Pool < input.txt
             - A simple "make" should compile the program with the provided makefile.
-            - Program will spin the user defined number of threads from the command line. Each thread 
-              will determine whether or not the user inputted number is a prime or not. Each task is 
-              doled out via task_manager. Users also have a few commands they can issue and can be
-              seen via typing help
+            - Program will spin the user defined number of threads from the command line. These threads
+              will wait until signaled from the task_manager. The user then inputs either a numeric value
+              or a command (help, pause, resume, or stop).
+                [#]     - On a numeric value, the task_manager will assign a thread to determain if the number
+                          is prime. Threads however will first sleep, to allow the use of multiple threads.
+                pause   - Pauses the execution of further input. Any thread already executing wil still
+                          continue to execute. Work should still be assigned when paused.
+                resume  - Resumes the exection of inputs if paused. Threads assigned work when paused will
+                          execute.
+                help    - Will essentially bring up this.
 */
 
 #include <iostream>
@@ -40,7 +46,6 @@ struct work_pack
 struct task_manager
 {
     pthread_mutex_t*      lock;   // Global Lock
-    std::queue<work_pack*> prog;  // Stores all the working threads
     std::queue<work_pack*> avail;  // Stores all the available threads
     task_manager() 
     { 
@@ -94,9 +99,9 @@ int main(int argc, char** argv)
     std::string buffer;
     bool is_Paused = false;
     print_usage();
+    printf("Available Threads: %ld\n", thread_pool->avail.size());
     while(std::cin >> buffer)
     {
-        printf("Available Threads: %ld\n", thread_pool->avail.size());
 
         if(buffer.compare("stop") == 0)
             break;
@@ -133,19 +138,29 @@ int main(int argc, char** argv)
         }
         else
             printf(">Invalid order please input a numeric value or 'help' for command list\n");
+        printf("Available Threads: %ld\n", thread_pool->avail.size());
     }
+
       // When Stop is specified ALL threads are returned then clean up
     printf(">Stop order recieved, resuming if paused and awaiting all threads return\n");
-    if(is_Paused)
-        pthread_mutex_unlock(thread_pool->lock); 
+    pthread_mutex_unlock(thread_pool->lock); 
     while(thread_pool->avail.size() < 10);
+    while(!thread_pool->avail.empty())
+    {
+        work_pack* tmp = thread_pool->avail.front();
+        tmp->num = -1;
+        pthread_cond_signal(tmp->wait);
+        thread_pool->avail.pop();
+        delete tmp;
+    }
+    delete thread_pool;
     return 0;
 }
 
 void print_usage()
 {
     printf("Usage(case sensitive):\n\t[#] - Input a number to see if it's prime or not\n");
-    printf("\tpause - pause all thread execution (All current working threads will complete)\n")
+    printf("\tpause - pause all thread execution (All current working threads will complete)\n");
     printf("\tresume - resume all thread execution(does nothing if not paused)\n");
     printf("\tstop - end the program\n\thelp - see this menue again\n");
 }
@@ -165,6 +180,10 @@ void* prime_thread(void* args)
         pthread_mutex_lock(global->lock);
         pthread_cond_wait(work->wait, global->lock);
         pthread_mutex_unlock(global->lock);
+        
+            // Signal that execution has stopped.
+        if(work->num == -1)
+            break;
     
             // Since the program goes by quick I wanted to give a bit of time
             // So the user could pause and accumulate tasks then resume
