@@ -1,9 +1,14 @@
 /*
     Author: Fazrian Prawiranata (fprawira)
-    Data: 09/11/2023
-    Notes:  A refresh on pthreads for parallelism. Please use on a unix system (Ubuntu or SSH hydra)
-            For example code please use the provided input.txt and do ./Thread_Pool < input.txt
-            A simple "make" should compile the thing.
+    Data:   09/11/2023
+    Notes:  usage: ./Thread_Pool [OPTIONAL Thread Count, Default = 10]
+            - A refresh on pthreads for parallelism. Please use on a unix system (Ubuntu or SSH hydra)
+            - For example code please use the provided input.txt and do ./Thread_Pool < input.txt
+            - A simple "make" should compile the program with the provided makefile.
+            - Program will spin the user defined number of threads from the command line. Each thread 
+              will determine whether or not the user inputted number is a prime or not. Each task is 
+              doled out via task_manager. Users also have a few commands they can issue and can be
+              seen via typing help
 */
 
 #include <iostream>
@@ -103,11 +108,11 @@ int main(int argc, char** argv)
         else if(buffer.compare("resume") == 0 && is_Paused == true) 
         {
             pthread_mutex_unlock(thread_pool->lock); 
-            printf(">Resume\n"); 
+            printf("> Resume\n"); 
             is_Paused = false;
         }
         else if(buffer.compare("resume") == 0 && is_Paused == false) 
-            printf(">Must be paused to resume\n"); 
+            printf("> Must be paused to resume\n"); 
         else if(buffer.compare("help") == 0)
         {
             print_usage();
@@ -139,7 +144,8 @@ int main(int argc, char** argv)
 void print_usage()
 {
     printf("Usage(case sensitive):\n\t[#] - Input a number to see if it's prime or not\n");
-    printf("\tpause - pause all threads\n\tresume - resume all threads(does nothing if not paused)\n");
+    printf("\tpause - pause all thread execution (All current working threads will complete)\n")
+    printf("\tresume - resume all thread execution(does nothing if not paused)\n");
     printf("\tstop - end the program\n\thelp - see this menue again\n");
 }
 
