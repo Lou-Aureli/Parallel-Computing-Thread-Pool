@@ -77,7 +77,8 @@ int main(int argc, char** argv)
     int num_thread = 10;
     if(argc >= 2)
         num_thread = std::stoi(argv[1]);
-      // Spin specified number of threads and have them wait for tasks
+        
+        // Spin specified number of threads and have them wait for tasks
     for(int i = 0; i < num_thread; ++i)
     {
         work_pack* tmp_w = new work_pack(i);
@@ -86,7 +87,8 @@ int main(int argc, char** argv)
             perror("pthread_create(Chat_Room)");
         thread_pool->avail.push(tmp_w);
     }  
-      // Await user input in a loop. If user specifies a number assign a thread
+        
+        // Await user input in a loop. If user specifies a number assign a thread
         // If user specifies an action, do the action
     int user_num;
     std::string buffer;
@@ -95,6 +97,7 @@ int main(int argc, char** argv)
     while(std::cin >> buffer)
     {
         printf("Available Threads: %ld\n", thread_pool->avail.size());
+
         if(buffer.compare("stop") == 0)
             break;
         else if(buffer.compare("pause") == 0 && is_Paused == false) 
@@ -114,9 +117,7 @@ int main(int argc, char** argv)
         else if(buffer.compare("resume") == 0 && is_Paused == false) 
             printf("> Must be paused to resume\n"); 
         else if(buffer.compare("help") == 0)
-        {
             print_usage();
-        }
         else if(isdigit(buffer[0]))
         {
             if(thread_pool->avail.size() == 0)
@@ -151,9 +152,9 @@ void print_usage()
 
 void* prime_thread(void* args)
 {
-    int sleep_num = 5;
+    int sleep_num = 5;      // Each thread will sleep for a number of seconds
     bool is_Prime = true;
-    thread_pack* arg = (thread_pack*)args;
+    thread_pack* arg = (thread_pack*)args;  // Unpack all needed info
     work_pack* work = (work_pack*)arg->work;
     task_manager* global = (task_manager*)arg->global;
     work->tid = arg->tid;
