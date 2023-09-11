@@ -1,7 +1,9 @@
 /*
-    Author: Fazrian Prawiranata
+    Author: Fazrian Prawiranata (fprawira)
     Data: 09/11/2023
-    Notes: A refresh on pthreads for parallelism
+    Notes:  A refresh on pthreads for parallelism. Please use on a unix system (Ubuntu or SSH hydra)
+            For example code please use the provided input.txt and do ./Thread_Pool < input.txt
+            A simple "make" should compile the thing.
 */
 
 #include <iostream>
@@ -23,17 +25,28 @@ struct work_pack
         wait = (pthread_cond_t *) malloc(sizeof(pthread_cond_t));
         pthread_cond_init(wait, NULL);
     }
-    ~work_pack() { pthread_cond_destroy(wait); }
+    ~work_pack() 
+    { 
+        pthread_cond_destroy(wait);
+        free(wait);
+    }
 };
 
 struct task_manager
 {
     pthread_mutex_t*      lock;   // Global Lock
+    std::queue<work_pack*> prog;  // Stores all the working threads
     std::queue<work_pack*> avail;  // Stores all the available threads
     task_manager() 
     { 
         lock = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t)); 
         pthread_mutex_init(lock, NULL);
+    }
+    ~task_manager()
+    {
+        pthread_mutex_unlock(lock);
+        pthread_mutex_destroy(lock);
+        free(lock);
     }
 };
 
@@ -72,38 +85,38 @@ int main(int argc, char** argv)
         // If user specifies an action, do the action
     int user_num;
     std::string buffer;
-    bool isPaused = false;
+    bool is_Paused = false;
     print_usage();
     while(std::cin >> buffer)
     {
         printf("Available Threads: %ld\n", thread_pool->avail.size());
-        if(buffer.compare("stop") == 0) 
+        if(buffer.compare("stop") == 0)
             break;
-        else if(buffer.compare("pause") == 0 && isPaused == false) 
+        else if(buffer.compare("pause") == 0 && is_Paused == false) 
         {
             pthread_mutex_lock(thread_pool->lock); 
-            printf("Paused\n");
-            isPaused = true;
+            printf(">Paused\n");
+            is_Paused = true;
         }
-        else if(buffer.compare("pause") == 0 && isPaused == true) 
-            printf("Already paused\n");
-        else if(buffer.compare("resume") == 0 && isPaused == true) 
+        else if(buffer.compare("pause") == 0 && is_Paused == true) 
+            printf(">Already paused\n");
+        else if(buffer.compare("resume") == 0 && is_Paused == true) 
         {
             pthread_mutex_unlock(thread_pool->lock); 
-            printf("Resume\n"); 
-            isPaused = false;
+            printf(">Resume\n"); 
+            is_Paused = false;
         }
-        else if(buffer.compare("resume") == 0 && isPaused == false) 
-            printf("Must be paused to resume\n"); 
+        else if(buffer.compare("resume") == 0 && is_Paused == false) 
+            printf(">Must be paused to resume\n"); 
         else if(buffer.compare("help") == 0)
         {
             print_usage();
         }
-        else
+        else if(isdigit(buffer[0]))
         {
             if(thread_pool->avail.size() == 0)
             {
-                printf("Please wait for a thread to become available.\n");
+                printf(">Please wait for a thread to become available.\n");
                 continue;
             }
             work_pack* tmp = thread_pool->avail.front();
@@ -112,8 +125,13 @@ int main(int argc, char** argv)
             tmp->num = user_num;
             pthread_cond_signal(tmp->wait);
         }
+        else
+            printf(">Invalid order please input a numeric value or 'help' for command list\n");
     }
       // When Stop is specified ALL threads are returned then clean up
+    printf(">Stop order recieved, resuming if paused and awaiting all threads return\n");
+    if(is_Paused)
+        pthread_mutex_unlock(thread_pool->lock); 
     while(thread_pool->avail.size() < 10);
     return 0;
 }
@@ -127,6 +145,7 @@ void print_usage()
 
 void* prime_thread(void* args)
 {
+    int sleep_num = 5;
     bool is_Prime = true;
     thread_pack* arg = (thread_pack*)args;
     work_pack* work = (work_pack*)arg->work;
@@ -142,8 +161,8 @@ void* prime_thread(void* args)
     
             // Since the program goes by quick I wanted to give a bit of time
             // So the user could pause and accumulate tasks then resume
-        printf("\tWorker Thread %d: I got your order of %d, gonna nap for 1s then work\n", work->id, work->num);
-        sleep(1);
+        printf("\tWorker Thread %d: I got your order of %d, gonna nap for %ds then work\n", work->id, work->num, sleep_num);
+        sleep(sleep_num);
         printf("\tWorker Thread %d: I'm up and working!\n", work->id);
         
             // Once signaled work can begin
